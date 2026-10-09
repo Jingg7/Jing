@@ -1,0 +1,39 @@
+你是一名 Python 开发工程师。请在我现有项目中修改 chat.py，把调用 LLM 的部分改为流式输出，其他功能保持不变。
+
+项目已有 config.ini，内容格式如下：
+[llm]
+base_url = xxx
+api_key = xxx
+model = xxx
+
+[assistant]
+name = xxx
+
+修改要求：
+1. 继续使用 configparser 读取 config.ini。
+2. 继续从 [llm] 读取 base_url、api_key、model。
+3. 继续从 [assistant] 读取 name，默认值为 xxx。
+4. 继续使用 openai 官方 Python SDK：
+   from openai import OpenAI
+   client = OpenAI(base_url=base_url, api_key=api_key)
+5. 程序启动后进入聊天循环，使用 input() 读取用户输入。
+6. 当用户输入去掉首尾空格后等于“我是谁？”或“我是谁?”时：
+   - 不调用 LLM。
+   - 先输出一行三个减号：---
+   - 再输出一行：我是{name}
+   - 然后继续等待下一次输入。
+7. 其他输入时：
+   - 把用户消息加入 messages 历史。
+   - 调用 client.chat.completions.create(..., stream=True)。
+   - 使用 for chunk in stream 逐块读取。
+   - 对每个 chunk，安全获取 chunk.choices[0].delta.content。
+   - 如果 content 不为空，则 print(content, end="", flush=True)，实现流式打印。
+   - 流式输出结束后 print() 换行。
+   - 把所有流式片段拼接成完整回复，并加入 messages 历史。
+8. 输入 exit、quit 或 退出 时结束程序。
+9. 如果 config.ini 缺失，或 base_url、model 为空，要给出友好提示。
+10. 调用 LLM 出错时捕获异常并打印错误信息，不要直接崩溃。
+11. 保留 main 函数和 if __name__ == "__main__": 入口。
+12. 代码使用 UTF-8，中文注释，简洁清晰。
+13. 不要修改 config.ini 和 requirements.txt。
+14. 最后只输出完整的 chat.py 代码，不要省略，不要额外解释。

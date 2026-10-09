@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>AnythingLLM 文档上传</title>
+<style>
+  body { font-family: sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+  .box { border: 1px solid #ccc; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+  button { padding: 8px 20px; cursor: pointer; }
+  #log div { padding: 4px 0; border-bottom: 1px dashed #eee; font-size: 14px; }
+  .ok { color: #0a7a0a; }
+  .err { color: #c00; }
+  .muted { color: #888; }
+</style>
+</head>
+<body>
+<h2>AnythingLLM 文档上传与向量化</h2>
+
+<div class="box">
+  <div>工作区：<b id="ws">加载中...</b></div>
+  <div class="muted" style="margin-top:6px">自动使用服务器上的第一个工作区</div>
+</div>
+
+<div class="box">
+  <input type="file" id="file" multiple>
+  <button id="btn" disabled>上传并嵌入</button>
+</div>
+
+<div id="log"></div>
+
+<script>
+const API = 'http://localhost:3001';
+const KEY = 'YOUR_ANYTHINGLLM_API_KEY';
+const headers = { 'Authorization': 'Bearer ' + KEY };
+const log = (msg, cls = '') => {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.textContent = msg;
+  document.getElementById('log').appendChild(d);
+};
+
+let slug = null;
+
+fetch(API + '/api/v1/workspaces', { headers })
+  .then(r => r.json())
+  .then(data => {
+    const ws = (data.workspaces || [])[0];
+    if (!ws) throw new Error('没有工作区');
+    slug = ws.slug;
+    document.getElementById('ws').textContent = ws.name + ' (' + ws.slug + ')';
+    document.getElementById('btn').disabled = false;
+  })
+  .catch(e => {
+    document.getElementById('ws').textContent = '获取失败: ' + e.message;
+    log('获取工作区失败: ' + e.message, 'err');
+  });
+
+document.getElementById('btn').onclick = async () => {
+  const files = [...document.getElementById('file').files];
+  if (!files.length) return alert('请选择文件');
+  const btn = document.getElementById('btn');
+  btn.disabled = true;
+  for (const f of files) {
+    const fd = new FormData();
+    fd.append('file', f);
+    fd.append('addToWorkspaces', slug);
+    log('上传中: ' + f.name + ' ...');
+    try {
+      const r = await fetch(API + '/api/v1/document/upload', {
+        method: 'POST',
+        headers,
+        body: fd
+      });
+      const data = await r.json();
+      if (data.success) {
+        const doc = (data.documents || [])[0];
+        log('完成: ' + f.name + ' -> ' + (doc ? doc.location : '已入库'), 'ok');
+      } else {
+        log('失败: ' + f.name + ' - ' + (data.error || r.status), 'err');
+      }
+    } catch (e) {
+      log('失败: ' + f.name + ' - ' + e.message, 'err');
+    }
+  }
+  btn.disabled = false;
+  log('全部处理完毕。文档已上传并加入工作区向量化。', 'ok');
+};
+</script>
+</body>
+</html>
