@@ -1,0 +1,56 @@
+[
+  {
+    "role": "user",
+    "content": "现在是什么时间"
+  },
+  {
+    "role": "assistant",
+    "content": null,
+    "tool_calls": [
+      {
+        "id": "gnIkCLMWM5yn2wFQ2aJQTfiJzLuolBal",
+        "type": "function",
+        "function": {
+          "name": "getDate",
+          "arguments": "{}"
+        }
+      }
+    ]
+  },
+  {
+    "role": "tool",
+    "tool_call_id": "gnIkCLMWM5yn2wFQ2aJQTfiJzLuolBal",
+    "content": "2026/10/21 周三 15:36"
+  },
+  {
+    "role": "assistant",
+    "content": "现在是2026年10月21日，星期三下午15点36分。"
+  },
+  {
+    "role": "user",
+    "content": "2026年是闰年吗"
+  },
+  {
+    "role": "assistant",
+    "content": null,
+    "tool_calls": [
+      {
+        "id": "P9yiZgJLH3RZiuywKcZqsrENbZgzIPnS",
+        "type": "function",
+        "function": {
+          "name": "isLeapYear",
+          "arguments": "{\"year\":2026}"
+        }
+      }
+    ]
+  },
+  {
+    "role": "tool",
+    "tool_call_id": "P9yiZgJLH3RZiuywKcZqsrENbZgzIPnS",
+    "content": "2026年不是闰年"
+  },
+  {
+    "role": "assistant",
+    "content": "2026年不是闰年。"
+  }
+]
