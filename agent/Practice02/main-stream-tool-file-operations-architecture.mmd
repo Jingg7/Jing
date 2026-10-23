@@ -1,0 +1,115 @@
+flowchart TD
+    subgraph ENTRY["入口与对话循环"]
+        USER["用户输入"]
+        MAIN["主循环<br/>while True"]
+        MSG[("messages<br/>会话上下文")]
+        SAVE["save_history()"]
+        HIST[("history-file-operations.json")]
+    end
+
+    subgraph ENGINE["模型交互层"]
+        STREAM["stream_reply()<br/>流式请求与 tool_calls 聚合"]
+        LLM["OpenAI 兼容接口<br/>config.ini 中的 base_url / model / api_key"]
+        PRINT["打印流式文本回复"]
+    end
+
+    subgraph TOOLING["工具调用层"]
+        DISPATCH["run_tool()<br/>解析 JSON 参数并分发"]
+        RESULT["工具执行结果字符串"]
+        ERROR["统一错误处理<br/>缺少参数 / 执行异常"]
+
+        subgraph TIME["时间工具"]
+            T1["getDate<br/>获取系统日期时间"]
+            T2["isLeapYear<br/>判断闰年"]
+        end
+
+        subgraph QUERY["查询工具"]
+            Q1["getCurrentDirectory<br/>获取当前工作目录"]
+            Q2["listDirectory<br/>列出目录内容"]
+            Q3["getFileType<br/>获取文件类型"]
+            Q4["readFile<br/>读取纯文本文件"]
+        end
+
+        subgraph CREATE["创建工具"]
+            C1["createFile<br/>创建新文件"]
+            C2["createDirectory<br/>创建新目录"]
+        end
+
+        subgraph MODIFY["编辑工具"]
+            E1["editFile<br/>覆盖或替换文本内容"]
+        end
+
+        subgraph REMOVE["删除与重命名"]
+            X1["deleteFile<br/>删除文件"]
+            X2["deleteDirectory<br/>递归删除非空目录"]
+            X3["renameFileOrDirectory<br/>重命名或移动"]
+        end
+    end
+
+    subgraph SUPPORT["辅助函数与本地基础设施"]
+        RP["resolve_path()<br/>展开并解析路径"]
+        DECODE["decode_text_bytes()<br/>UTF-8 / GBK 解码与二进制检测"]
+        READTEXT["read_text_file()<br/>文本读取与 1 MB 限制"]
+        GUARD["安全校验<br/>拒绝根目录 / 包含当前工作目录的路径"]
+        FS["本地文件系统与系统命令<br/>pathlib / shutil / os / mimetypes / subprocess"]
+    end
+
+    USER --> MAIN
+    MAIN -->|"追加 user 消息"| MSG
+    MAIN --> STREAM
+    STREAM -->|"messages + tools"| LLM
+    LLM -->|"流式响应增量"| STREAM
+    STREAM -->|"content"| PRINT
+    STREAM -->|"tool_calls"| DISPATCH
+    DISPATCH -->|"分发调用"| T1
+    DISPATCH --> T2
+    DISPATCH --> Q1
+    DISPATCH --> Q2
+    DISPATCH --> Q3
+    DISPATCH --> Q4
+    DISPATCH --> C1
+    DISPATCH --> C2
+    DISPATCH --> E1
+    DISPATCH --> X1
+    DISPATCH --> X2
+    DISPATCH --> X3
+    DISPATCH -->|"参数错误或异常"| ERROR
+    T1 --> RESULT
+    T2 --> RESULT
+    Q1 --> RESULT
+    Q2 --> RESULT
+    Q3 --> RESULT
+    Q4 --> RESULT
+    C1 --> RESULT
+    C2 --> RESULT
+    E1 --> RESULT
+    X1 --> RESULT
+    X2 --> RESULT
+    X3 --> RESULT
+    ERROR --> RESULT
+    RESULT -->|"追加 tool 消息"| MSG
+    MSG -->|"下一轮请求"| STREAM
+    MAIN -->|"每轮对话结束"| SAVE
+    SAVE -->|"写入"| HIST
+    HIST -->|"启动时读取"| MSG
+
+    Q1 --> RP
+    Q2 --> RP
+    Q3 --> RP
+    Q4 --> RP
+    C1 --> RP
+    C2 --> RP
+    E1 --> RP
+    X1 --> RP
+    X2 --> RP
+    X3 --> RP
+    Q4 --> READTEXT
+    E1 --> READTEXT
+    Q3 --> DECODE
+    READTEXT --> DECODE
+    X2 --> GUARD
+    X3 --> GUARD
+    RP --> FS
+    READTEXT --> FS
+    GUARD --> FS
+    SAVE --> FS
