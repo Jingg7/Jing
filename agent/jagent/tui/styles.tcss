@@ -1,0 +1,241 @@
+Screen {
+    layout: vertical;
+    background: #0a0a0a;
+}
+
+Header {
+    background: #101010;
+    color: #e5e5e5;
+}
+
+HeaderTitle {
+    color: #ffffff;
+    text-style: bold;
+}
+
+HeaderSubtitle {
+    color: #8f8f8f;
+}
+
+HeaderClock {
+    color: #8f8f8f;
+}
+
+#chat {
+    height: 1fr;
+    padding: 1 2 1 2;
+    background: #0a0a0a;
+}
+
+.message {
+    width: 100%;
+    height: auto;
+    margin: 0 0 1 0;
+    padding: 1 2;
+    border: none;
+    background: #151515;
+}
+
+.message.welcome {
+    margin-bottom: 2;
+    border: none;
+    background: #1a1a1a;
+}
+
+.message.user {
+    border: none;
+    background: #202020;
+}
+
+.message.assistant {
+    border: none;
+    background: #151515;
+}
+
+.message.error {
+    border: none;
+    background: #171717;
+}
+
+.message.tool {
+    padding: 0 1;
+    border: none;
+    background: #1a1a1a;
+}
+
+.message-label {
+    height: 1;
+    margin-bottom: 1;
+}
+
+.message.tool Collapsible {
+    height: auto;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
+.message.tool CollapsibleTitle {
+    background: transparent;
+    color: #bfbfbf;
+}
+
+.tool-output {
+    padding: 0 1 1 1;
+    color: #bfbfbf;
+}
+
+#status {
+    height: 1;
+    padding: 0 3;
+    color: #8f8f8f;
+    background: #0a0a0a;
+}
+
+#input-row {
+    height: 3;
+    margin: 0 2 1 2;
+}
+
+#prompt {
+    height: 3;
+    width: 1fr;
+    padding: 0 1;
+    background: #151515;
+    color: #e5e5e5;
+}
+
+#prompt:focus {
+    border: none;
+    background: #1a1a1a;
+}
+
+#send {
+    width: 12;
+    height: 3;
+    margin-left: 1;
+    border: none;
+    background: #e5e5e5;
+    color: #0a0a0a;
+    text-style: bold;
+}
+
+#send:hover {
+    background: #ffffff;
+}
+
+#send:disabled {
+    background: #1a1a1a;
+    color: #5a5a5a;
+}
+
+Footer {
+    background: #101010;
+}
+
+FooterKey {
+    background: #101010;
+    color: #bfbfbf;
+}
+
+FooterLabel {
+    color: #8f8f8f;
+}
+
+#sidebar {
+    width: 28;
+    background: #101010;
+    border-right: none;
+    padding: 1 1;
+    layout: vertical;
+}
+
+#sidebar.hidden {
+    width: 0;
+    border-right: none;
+    padding: 0;
+    display: none;
+}
+
+#sidebar-title {
+    height: 1;
+    margin: 0 1 1 1;
+    color: #ffffff;
+    text-style: bold;
+}
+
+.sidebar-btn {
+    width: 100%;
+    height: 1;
+    border: none;
+    background: transparent;
+    color: #d9d9d9;
+    text-align: left;
+    padding: 0 1;
+}
+
+.sidebar-btn:hover {
+    background: #1a1a1a;
+    color: #ffffff;
+}
+
+.sidebar-section {
+    height: 1;
+    margin: 1 1 0 1;
+    color: #6f6f6f;
+    text-style: bold;
+}
+
+#session-name {
+    height: 1;
+    margin: 0 1 1 1;
+    color: #bfbfbf;
+}
+
+.sidebar-tool {
+    width: 100%;
+    height: 1;
+    border: none;
+    background: transparent;
+    color: #9b9b9b;
+    text-align: left;
+    padding: 0 1;
+}
+
+.sidebar-tool:hover {
+    background: #151515;
+    color: #e5e5e5;
+}
+
+#sidebar-spacer {
+    height: 1fr;
+}
+
+#sidebar-footer {
+    height: 1;
+    margin: 1 1 0 1;
+    color: #6f6f6f;
+}
+
+#workspace {
+    height: 1fr;
+}
+
+#main {
+    height: 1fr;
+    layout: vertical;
+}
+
+#toolbar {
+    height: 1;
+    background: #0a0a0a;
+    border-bottom: none;
+    padding: 0 1 0 2;
+}
+
+#toolbar-title {
+    width: 1fr;
+    color: #d9d9d9;
+}
+
