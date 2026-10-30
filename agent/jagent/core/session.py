@@ -67,10 +67,13 @@ class AgentSession:
         self._messages: list[dict[str, Any]] = (
             history.load() if history is not None else []
         )
-        if system_prompt and not any(
-            message.get("role") == "system" for message in self._messages
-        ):
-            self._messages.insert(0, {"role": "system", "content": system_prompt})
+        if system_prompt:
+            for message in self._messages:
+                if message.get("role") == "system":
+                    message["content"] = system_prompt
+                    break
+            else:
+                self._messages.insert(0, {"role": "system", "content": system_prompt})
 
     @property
     def messages(self) -> tuple[dict[str, Any], ...]:
@@ -79,6 +82,15 @@ class AgentSession:
     @property
     def tools(self) -> list[dict[str, Any]]:
         return self._registry.schemas()
+
+    async def clear(self) -> None:
+        system_messages = [
+            dict(message)
+            for message in self._messages
+            if message.get("role") == "system"
+        ]
+        self._messages = system_messages[:1]
+        await self._save_history()
 
     async def _save_history(self) -> None:
         if self._history is not None:

@@ -246,6 +246,7 @@ class JAgentApp(App[None]):
 
     @work(group="view")
     async def _clear_chat(self) -> None:
+        await self._session.clear()
         chat = self.query_one("#chat", VerticalScroll)
         await chat.remove_children()
         await chat.mount(WelcomeMessage())

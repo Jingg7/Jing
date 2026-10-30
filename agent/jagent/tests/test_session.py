@@ -95,6 +95,32 @@ class AgentSessionTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(loaded[2]["content"], "echo:hi")
             self.assertEqual(loaded[3]["content"], "完成")
 
+    async def test_clear_resets_history_and_keeps_system_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history_path = Path(temp_dir) / "history.json"
+            history = HistoryStore(history_path)
+            history.save(
+                [
+                    {"role": "system", "content": "旧提示词"},
+                    {"role": "user", "content": "旧问题"},
+                    {"role": "assistant", "content": "旧回答"},
+                ]
+            )
+            session = AgentSession(
+                model=FakeModel([]),
+                registry=ToolRegistry([EchoTool()]),
+                history=history,
+                system_prompt="新提示词",
+            )
+
+            await session.clear()
+
+            self.assertEqual(
+                session.messages,
+                ({"role": "system", "content": "新提示词"},),
+            )
+            self.assertEqual(HistoryStore(history_path).load(), list(session.messages))
+
 
 if __name__ == "__main__":
     unittest.main()

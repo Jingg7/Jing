@@ -21,13 +21,14 @@ class FileToolTests(unittest.TestCase):
 
     def test_default_registry_contains_all_tools(self) -> None:
         names = set(self.registry.names())
-        self.assertEqual(len(names), 15)
+        self.assertEqual(len(names), 16)
         self.assertIn("getDate", names)
         self.assertIn("readFile", names)
         self.assertIn("renameFileOrDirectory", names)
         self.assertIn("fetchWeb", names)
         self.assertIn("searchWeb", names)
         self.assertIn("RunCli", names)
+        self.assertIn("loadSkill", names)
 
     def test_current_directory(self) -> None:
         output = self.execute("getCurrentDirectory")

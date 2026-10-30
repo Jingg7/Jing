@@ -12,7 +12,14 @@ from .events import (
 from .history import HistoryStore
 from .llm import ChatDelta, ChatModel, OpenAIChatModel, ToolCall, ToolCallDelta
 from .session import AgentSession
-from .tools import BaseTool, FileToolConfig, ToolRegistry, build_default_registry
+from .skills import Skill, SkillManager, compose_system_prompt, discover_skills
+from .tools import (
+    BaseTool,
+    FileToolConfig,
+    LoadSkillTool,
+    ToolRegistry,
+    build_default_registry,
+)
 
 __all__ = [
     "AgentConfig",
@@ -33,8 +40,13 @@ __all__ = [
     "ChatDelta",
     "ToolCall",
     "ToolCallDelta",
+    "Skill",
+    "SkillManager",
+    "discover_skills",
+    "compose_system_prompt",
     "BaseTool",
     "ToolRegistry",
     "FileToolConfig",
+    "LoadSkillTool",
     "build_default_registry",
 ]

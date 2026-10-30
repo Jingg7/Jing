@@ -27,11 +27,13 @@ agent/jagent/
 │   ├── history.py               # 会话历史持久化
 │   ├── llm.py                   # ChatModel 协议与 OpenAI 实现
 │   ├── session.py               # Agent 会话编排、流式聚合与工具循环
+│   ├── skills.py                # Skill 发现、加载与 System Prompt 注入
 │   └── tools/
 │       ├── __init__.py          # 默认工具注册表
 │       ├── base.py              # 工具抽象基类
 │       ├── registry.py          # 工具注册与统一错误处理
 │       ├── datetime_tools.py    # 时间工具
+│       ├── skill_tools.py       # loadSkill 工具
 │       ├── web_tools.py         # 网页正文抓取与网络搜索工具
 │       └── filesystem/
 │           ├── common.py        # 路径、编码、文本检测与安全校验
@@ -83,6 +85,7 @@ agent/jagent/
 | `fetchWeb` | 使用本地 `curl` 获取网页，并通过 trafilatura 提取 Markdown 正文 |
 | `searchWeb` | 调用百度千帆搜索 API，返回搜索摘要、标题、URL 和日期 |
 | `RunCli` | 调用本地已安装的命令行程序，返回 stdout、stderr 和退出码 |
+| `loadSkill` | 按名称加载 Skill 的完整 `SKILL.md`，或加载 Skill 目录内的附件文件 |
 
 删除目录和重命名操作会拒绝文件系统根目录，以及包含当前工作目录的路径。
 
@@ -91,6 +94,27 @@ agent/jagent/
 `searchWeb` 需要 `config.ini` 中的 `[search]` 配置，API Key 只从配置文件读取，不会写入代码或工具结果。搜索失败、超时、鉴权错误或缺少配置时，会通过工具结果向模型返回明确的错误信息。
 
 `RunCli` 接受程序名称 `command` 和参数列表 `args`，将二者拼装为参数列表后通过 `subprocess.run(..., shell=False)` 执行，默认超时 30 秒。工具会返回标准输出、标准错误和退出码；单段输出超过 6000 个字符时会截断并标注截断情况。命令以运行 JAgent 的当前用户权限执行，当前阶段未实现命令白名单、黑名单或审批机制，仅用于受控教学实验环境。
+
+## Skill 动态加载
+
+JAgent 以启动时的工作目录作为项目根目录，扫描 `.agents/skills/` 下的 Skill 子目录。每个子目录必须包含 `SKILL.md`，并在文件开头的 YAML Frontmatter 中声明 `name` 和 `description`：
+
+```markdown
+---
+name: pdf-tools
+description: Extract text and metadata from PDF files.
+---
+
+# PDF Tools
+
+这里是完整的使用说明，只有在模型调用 `loadSkill` 时才会进入上下文。
+```
+
+初始化阶段只解析 Frontmatter，将 `name` 与 `description` 注入 System Prompt，不会读取完整正文。模型需要时调用 `loadSkill`：
+
+- 仅传 `name`：返回该 Skill 的 `SKILL.md` 全文。
+- 传 `name` 和 `filename`：读取 Skill 目录内的附件文件。`filename` 支持相对于 Skill 目录、相对于项目根目录以及绝对路径；只传文件名时会递归查找，重名时返回候选路径。
+- 所有文件读取都限制在对应 Skill 目录内。
 
 ## 运行
 
