@@ -16,7 +16,7 @@ from .filesystem import (
     RenameFileOrDirectoryTool,
 )
 from .registry import ToolRegistry
-from .skill_tools import LoadSkillTool
+from .skill_tools import CreateSkillTool, LoadSkillTool
 from .web_tools import FetchWebTool, SearchWebTool
 
 
@@ -48,6 +48,7 @@ def build_default_registry(
             SearchWebTool(search_api_key),
             RunCliTool(),
             LoadSkillTool(skill_manager),
+            CreateSkillTool(skill_manager),
         ]
     )
 
@@ -60,5 +61,6 @@ __all__ = [
     "SearchWebTool",
     "RunCliTool",
     "LoadSkillTool",
+    "CreateSkillTool",
     "build_default_registry",
 ]

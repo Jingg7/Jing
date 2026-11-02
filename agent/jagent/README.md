@@ -33,7 +33,7 @@ agent/jagent/
 │       ├── base.py              # 工具抽象基类
 │       ├── registry.py          # 工具注册与统一错误处理
 │       ├── datetime_tools.py    # 时间工具
-│       ├── skill_tools.py       # loadSkill 工具
+│       ├── skill_tools.py       # loadSkill / createSkill 工具
 │       ├── web_tools.py         # 网页正文抓取与网络搜索工具
 │       └── filesystem/
 │           ├── common.py        # 路径、编码、文本检测与安全校验
@@ -86,6 +86,7 @@ agent/jagent/
 | `searchWeb` | 调用百度千帆搜索 API，返回搜索摘要、标题、URL 和日期 |
 | `RunCli` | 调用本地已安装的命令行程序，返回 stdout、stderr 和退出码 |
 | `loadSkill` | 按名称加载 Skill 的完整 `SKILL.md`，或加载 Skill 目录内的附件文件 |
+| `createSkill` | 根据名称和完整内容创建符合规范的 Skill，已存在时不覆盖 |
 
 删除目录和重命名操作会拒绝文件系统根目录，以及包含当前工作目录的路径。
 
@@ -115,6 +116,8 @@ description: Extract text and metadata from PDF files.
 - 仅传 `name`：返回该 Skill 的 `SKILL.md` 全文。
 - 传 `name` 和 `filename`：读取 Skill 目录内的附件文件。`filename` 支持相对于 Skill 目录、相对于项目根目录以及绝对路径；只传文件名时会递归查找，重名时返回候选路径。
 - 所有文件读取都限制在对应 Skill 目录内。
+
+模型也可以调用 `createSkill` 根据自然语言要求创建新的 Skill。工具接收 `name` 和 `skillContext` 两个参数，将名称规范化为小写字母、数字和连字符组成的格式，并在 `.agents/skills/<name>/SKILL.md` 中写入包含 `name`、`description` 和正文的完整内容。`skillContext` 可以自带 YAML Frontmatter，其中的 `description` 会被保留；未提供时会从正文首段自动生成。如果同名 Skill 已存在，工具只返回提示，不会覆盖原内容。需要补充 `references/`、`scripts/` 等目录或文件时，模型应继续调用 `createDirectory`、`createFile` 等文件工具。
 
 ## 运行
 

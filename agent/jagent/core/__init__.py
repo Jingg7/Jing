@@ -15,6 +15,7 @@ from .session import AgentSession
 from .skills import Skill, SkillManager, compose_system_prompt, discover_skills
 from .tools import (
     BaseTool,
+    CreateSkillTool,
     FileToolConfig,
     LoadSkillTool,
     ToolRegistry,
@@ -48,5 +49,6 @@ __all__ = [
     "ToolRegistry",
     "FileToolConfig",
     "LoadSkillTool",
+    "CreateSkillTool",
     "build_default_registry",
 ]

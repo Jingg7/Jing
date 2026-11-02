@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -10,6 +11,7 @@ SKILLS_DIRECTORY = Path(".agents") / "skills"
 SKILL_FILENAME = "SKILL.md"
 MAX_FRONTMATTER_LINES = 512
 DEFAULT_MAX_READ_BYTES = 1024 * 1024
+SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 @dataclass(frozen=True)
@@ -62,16 +64,81 @@ def _one_line(text: str) -> str:
     return " ".join(text.split())
 
 
+def normalize_skill_name(raw: str) -> str:
+    candidate = re.sub(r"[\s_]+", "-", raw.strip().lower())
+    candidate = re.sub(r"-{2,}", "-", candidate).strip("-")
+    if not candidate or not SKILL_NAME_PATTERN.fullmatch(candidate):
+        raise ValueError(
+            "无效的 Skill 名称，必须由小写英文字母、数字和连字符组成，"
+            "例如 pdf-tools"
+        )
+    return candidate
+
+
+def _split_frontmatter(content: str) -> tuple[dict[str, Any], str, str | None]:
+    text = content.lstrip("\ufeff")
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}, text, None
+
+    data_lines: list[str] = []
+    end_index: int | None = None
+    for index, line in enumerate(lines[1:], start=1):
+        if line.rstrip() in {"---", "..."}:
+            end_index = index
+            break
+        data_lines.append(line)
+    if end_index is None:
+        return {}, text, "YAML Frontmatter 未闭合"
+
+    try:
+        data = yaml.safe_load("\n".join(data_lines)) or {}
+    except yaml.YAMLError as exc:
+        return {}, text, f"YAML Frontmatter 解析失败: {exc}"
+    if not isinstance(data, dict):
+        return {}, text, "YAML Frontmatter 必须是对象"
+    body = "\n".join(lines[end_index + 1 :])
+    return data, body, None
+
+
+def _derive_description(body: str) -> str:
+    paragraphs: list[str] = []
+    current: list[str] = []
+    headings: list[str] = []
+    for raw_line in body.splitlines():
+        line = raw_line.strip()
+        if not line:
+            if current:
+                paragraphs.append(" ".join(current))
+                current = []
+            continue
+        if line.startswith("#"):
+            if not headings and not current and not paragraphs:
+                headings.append(line.lstrip("#").strip())
+            continue
+        current.append(line)
+    if current:
+        paragraphs.append(" ".join(current))
+    candidate = paragraphs[0] if paragraphs else (headings[0] if headings else "")
+    return _one_line(candidate)
+
+
 class SkillManager:
     def __init__(
         self,
         skills: Iterable[Skill] | None = None,
         *,
         project_root: str | Path | None = None,
+        skills_directory: str | Path | None = None,
         max_read_bytes: int = DEFAULT_MAX_READ_BYTES,
     ):
         self._project_root = Path(
             project_root if project_root is not None else Path.cwd()
+        ).expanduser().resolve()
+        self._skills_directory = Path(
+            skills_directory
+            if skills_directory is not None
+            else self._project_root / SKILLS_DIRECTORY
         ).expanduser().resolve()
         self._max_read_bytes = max_read_bytes
         self._skills: dict[str, Skill] = {}
@@ -120,11 +187,20 @@ class SkillManager:
                         directory=child.resolve(),
                     )
                 )
-        return cls(skills, project_root=root, max_read_bytes=max_read_bytes)
+        return cls(
+            skills,
+            project_root=root,
+            skills_directory=directory,
+            max_read_bytes=max_read_bytes,
+        )
 
     @property
     def skills(self) -> tuple[Skill, ...]:
         return tuple(self._skills.values())
+
+    @property
+    def skills_directory(self) -> Path:
+        return self._skills_directory
 
     def get(self, name: str) -> Skill | None:
         return self._skills.get(name)
@@ -142,6 +218,86 @@ class SkillManager:
             "skill by passing the optional `filename` parameter."
         )
         return "\n".join(lines)
+
+    def create(self, name: str, content: str) -> str:
+        if not isinstance(content, str) or not content.strip():
+            return "Skill 内容不能为空"
+
+        try:
+            skill_name = normalize_skill_name(str(name))
+        except ValueError as exc:
+            return str(exc)
+
+        target_directory = (self._skills_directory / skill_name).resolve()
+        if not _is_within(target_directory, self._skills_directory):
+            return f"拒绝在 Skill 目录之外创建 Skill: {target_directory}"
+        if skill_name in self._skills or target_directory.exists():
+            return (
+                f"Skill 已存在: {skill_name}（{target_directory}），"
+                "未做任何修改。如需更新请使用 editFile 等文件工具。"
+            )
+
+        metadata, body, error = _split_frontmatter(content)
+        if error is not None:
+            return f"无法解析 skillContext: {error}"
+
+        description = metadata.get("description")
+        if not isinstance(description, str) or not description.strip():
+            description = _derive_description(body)
+        description = _one_line(description)
+        if not description:
+            return (
+                "无法从 skillContext 中获取有效的 description，"
+                "请在 YAML Frontmatter 中提供 description 或补充正文内容"
+            )
+
+        body_text = body.strip()
+        if not body_text:
+            return "skillContext 缺少正文内容"
+
+        frontmatter: dict[str, Any] = {
+            "name": skill_name,
+            "description": description,
+        }
+        for key, value in metadata.items():
+            if key not in frontmatter:
+                frontmatter[key] = value
+
+        try:
+            target_directory.mkdir(parents=True, exist_ok=False)
+        except FileExistsError:
+            return f"Skill 已存在: {skill_name}（{target_directory}），未做任何修改。"
+        except OSError as exc:
+            return f"创建 Skill 失败: {exc}"
+
+        skill_file = target_directory / SKILL_FILENAME
+        serialized = yaml.safe_dump(
+            frontmatter,
+            allow_unicode=True,
+            sort_keys=False,
+            default_flow_style=False,
+        ).strip()
+        text = f"---\n{serialized}\n---\n\n{body_text}\n"
+        try:
+            with skill_file.open("x", encoding="utf-8", newline="") as handle:
+                handle.write(text)
+        except FileExistsError:
+            return f"Skill 已存在: {skill_name}（{target_directory}），未做任何修改。"
+        except OSError as exc:
+            return f"创建 Skill 失败: {exc}"
+
+        self._skills[skill_name] = Skill(
+            name=skill_name,
+            description=description,
+            directory=target_directory,
+        )
+        return (
+            f"已创建 Skill: {skill_name}\n"
+            f"目录: {target_directory}\n"
+            f"文件: {skill_file}\n"
+            "如需添加 references/、scripts/ 等目录或其他辅助文件，"
+            "请继续使用 createDirectory、createFile 等文件工具。"
+        )
 
     def load(self, name: str, filename: str | None = None) -> str:
         skill = self._skills.get(name)

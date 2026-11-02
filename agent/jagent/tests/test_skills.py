@@ -177,6 +177,88 @@ class SkillLoadingTests(unittest.TestCase):
         )
 
 
+class SkillCreationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.manager = SkillManager.discover(self.root)
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    def test_creates_skill_with_normalized_name_and_registers_it(self) -> None:
+        output = self.manager.create(
+            "PDF Tools",
+            "---\n"
+            "description: Work with PDF files.\n"
+            "---\n\n"
+            "# PDF Tools\n\nUse these instructions.\n",
+        )
+
+        self.assertIn("已创建 Skill: pdf-tools", output)
+        skill_file = self.root / ".agents" / "skills" / "pdf-tools" / "SKILL.md"
+        self.assertTrue(skill_file.is_file())
+        content = skill_file.read_text(encoding="utf-8")
+        self.assertTrue(content.startswith("---\n"))
+        self.assertIn("name: pdf-tools", content)
+        self.assertIn("description: Work with PDF files.", content)
+        self.assertIn("# PDF Tools", content)
+        self.assertEqual(self.manager.get("pdf-tools") is not None, True)
+        self.assertIn("Use these instructions.", self.manager.load("pdf-tools"))
+
+    def test_derives_description_when_frontmatter_omits_it(self) -> None:
+        output = self.manager.create(
+            "demo-skill",
+            "# Demo\n\nHelp the user with demo tasks.\n\nMore details.",
+        )
+
+        self.assertIn("已创建 Skill: demo-skill", output)
+        content = (
+            self.root / ".agents" / "skills" / "demo-skill" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("description: Help the user with demo tasks.", content)
+        self.assertIn("More details.", content)
+
+    def test_does_not_overwrite_existing_skill(self) -> None:
+        self.manager.create(
+            "demo-skill",
+            "---\ndescription: First version.\n---\n\nOriginal body.",
+        )
+
+        output = self.manager.create(
+            "demo-skill",
+            "---\ndescription: Second version.\n---\n\nNew body.",
+        )
+
+        self.assertIn("Skill 已存在", output)
+        content = (
+            self.root / ".agents" / "skills" / "demo-skill" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Original body.", content)
+        self.assertNotIn("New body.", content)
+
+    def test_rejects_invalid_skill_name(self) -> None:
+        output = self.manager.create("中文名称", "Body content.")
+
+        self.assertIn("无效的 Skill 名称", output)
+        self.assertFalse((self.root / ".agents" / "skills").exists())
+
+    def test_registry_exposes_create_skill(self) -> None:
+        registry = build_default_registry(
+            FileToolConfig(), skills=self.manager
+        )
+
+        self.assertIn("createSkill", registry.names())
+        output = registry.execute(
+            "createSkill",
+            {
+                "name": "demo-skill",
+                "skillContext": "# Demo\n\nDemo instructions.",
+            },
+        )
+        self.assertIn("已创建 Skill: demo-skill", output)
+
+
 class SkillSessionTests(unittest.TestCase):
     def test_create_session_injects_skills_and_registers_tool(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
