@@ -11,6 +11,9 @@ class ToolRegistry:
         for tool in tools or ():
             self.register(tool)
 
+    def unregister(self, name: str) -> None:
+        self._tools.pop(name, None)
+
     def register(self, tool: BaseTool) -> None:
         if tool.name in self._tools:
             raise ValueError(f"工具重复注册: {tool.name}")

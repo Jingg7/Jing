@@ -25,13 +25,16 @@ class Skill:
         return self.directory / SKILL_FILENAME
 
 
-def _read_frontmatter(path: Path) -> tuple[dict[str, Any] | None, str | None]:
+def _read_frontmatter(
+    path: Path,
+    max_frontmatter_lines: int = MAX_FRONTMATTER_LINES,
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         with path.open("r", encoding="utf-8-sig") as handle:
             if handle.readline().strip() != "---":
                 return None, "缺少 YAML Frontmatter"
             lines: list[str] = []
-            for _ in range(MAX_FRONTMATTER_LINES):
+            for _ in range(max_frontmatter_lines):
                 line = handle.readline()
                 if not line:
                     return None, "YAML Frontmatter 未闭合"
@@ -131,16 +134,21 @@ class SkillManager:
         project_root: str | Path | None = None,
         skills_directory: str | Path | None = None,
         max_read_bytes: int = DEFAULT_MAX_READ_BYTES,
+        max_frontmatter_lines: int = MAX_FRONTMATTER_LINES,
     ):
-        self._project_root = Path(
+        root = Path(
             project_root if project_root is not None else Path.cwd()
         ).expanduser().resolve()
-        self._skills_directory = Path(
-            skills_directory
-            if skills_directory is not None
-            else self._project_root / SKILLS_DIRECTORY
-        ).expanduser().resolve()
+        if skills_directory is None:
+            skills_path = root / SKILLS_DIRECTORY
+        else:
+            skills_path = Path(skills_directory).expanduser()
+            if not skills_path.is_absolute():
+                skills_path = root / skills_path
+        self._project_root = root
+        self._skills_directory = skills_path.resolve()
         self._max_read_bytes = max_read_bytes
+        self._max_frontmatter_lines = max_frontmatter_lines
         self._skills: dict[str, Skill] = {}
         for skill in skills or ():
             self._skills.setdefault(skill.name, skill)
@@ -152,15 +160,16 @@ class SkillManager:
         *,
         max_read_bytes: int = DEFAULT_MAX_READ_BYTES,
         skills_directory: str | Path | None = None,
+        max_frontmatter_lines: int = MAX_FRONTMATTER_LINES,
     ) -> "SkillManager":
         root = Path(
             project_root if project_root is not None else Path.cwd()
         ).expanduser().resolve()
-        directory = (
-            Path(skills_directory)
-            if skills_directory is not None
-            else root / SKILLS_DIRECTORY
-        ).expanduser().resolve()
+        directory = Path(skills_directory) if skills_directory is not None else root / SKILLS_DIRECTORY
+        directory = directory.expanduser()
+        if not directory.is_absolute():
+            directory = root / directory
+        directory = directory.resolve()
 
         skills: list[Skill] = []
         if directory.is_dir():
@@ -171,7 +180,10 @@ class SkillManager:
                 skill_file = child / SKILL_FILENAME
                 if not skill_file.is_file():
                     continue
-                data, error = _read_frontmatter(skill_file)
+                data, error = _read_frontmatter(
+                    skill_file,
+                    max_frontmatter_lines,
+                )
                 if error is not None or data is None:
                     continue
                 name = data.get("name")
@@ -192,6 +204,7 @@ class SkillManager:
             project_root=root,
             skills_directory=directory,
             max_read_bytes=max_read_bytes,
+            max_frontmatter_lines=max_frontmatter_lines,
         )
 
     @property
@@ -394,11 +407,13 @@ def discover_skills(
     *,
     max_read_bytes: int = DEFAULT_MAX_READ_BYTES,
     skills_directory: str | Path | None = None,
+    max_frontmatter_lines: int = MAX_FRONTMATTER_LINES,
 ) -> SkillManager:
     return SkillManager.discover(
         project_root,
         max_read_bytes=max_read_bytes,
         skills_directory=skills_directory,
+        max_frontmatter_lines=max_frontmatter_lines,
     )
 
 

@@ -91,6 +91,9 @@ class GetFileTypeTool(BaseTool):
         "required": ["path"],
     }
 
+    def __init__(self, config: FileToolConfig | None = None):
+        self._config = config or FileToolConfig()
+
     def run(self, arguments: dict[str, Any]) -> str:
         target = resolve_path(arguments["path"])
         if not target.exists():
@@ -115,7 +118,8 @@ class GetFileTypeTool(BaseTool):
             category = "可执行文件"
         else:
             try:
-                sample = target.read_bytes()[:4096]
+                with target.open("rb") as handle:
+                    sample = handle.read(self._config.file_type_sample_bytes)
             except OSError:
                 sample = b""
             category = "文本文件" if decode_text_bytes(sample) else "二进制文件"

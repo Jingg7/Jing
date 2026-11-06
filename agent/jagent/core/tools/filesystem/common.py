@@ -31,6 +31,16 @@ EXECUTABLE_EXTENSIONS = {".exe", ".dll", ".so", ".dylib", ".msi", ".apk"}
 @dataclass(frozen=True)
 class FileToolConfig:
     max_read_bytes: int = DEFAULT_MAX_READ_BYTES
+    file_type_sample_bytes: int = 4096
+    cli_timeout: float = 30.0
+    cli_max_output_chars: int = 6000
+    web_timeout: float = 20.0
+    web_connect_timeout: float = 10.0
+    web_error_max_chars: int = 500
+    search_endpoint: str = (
+        "https://qianfan.baidubce.com/v2/ai_search/web_search"
+    )
+    search_max_results: int = 10
 
 
 def resolve_path(path: str | Path) -> Path:

@@ -10,11 +10,14 @@ from urllib.parse import urlparse
 
 import trafilatura
 
+from ..config import DEFAULT_SEARCH_ENDPOINT, DEFAULT_SEARCH_MAX_RESULTS
 from .base import BaseTool
 
 DEFAULT_TIMEOUT = 20.0
 DEFAULT_CURL = "curl"
-QIANFAN_SEARCH_ENDPOINT = "https://qianfan.baidubce.com/v2/ai_search/web_search"
+DEFAULT_CONNECT_TIMEOUT = 10.0
+DEFAULT_MAX_ERROR_CHARS = 500
+QIANFAN_SEARCH_ENDPOINT = DEFAULT_SEARCH_ENDPOINT
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -44,9 +47,13 @@ class FetchWebTool(BaseTool):
         self,
         timeout: float = DEFAULT_TIMEOUT,
         curl_executable: str = DEFAULT_CURL,
+        connect_timeout: float = DEFAULT_CONNECT_TIMEOUT,
+        max_error_chars: int = DEFAULT_MAX_ERROR_CHARS,
     ):
         self._timeout = timeout
         self._curl = curl_executable
+        self._connect_timeout = connect_timeout
+        self._max_error_chars = max_error_chars
 
     def run(self, arguments: dict[str, Any]) -> str:
         url = str(arguments["url"]).strip()
@@ -71,8 +78,8 @@ class FetchWebTool(BaseTool):
 
         if response.returncode != 0:
             detail = self._decode_output(response.stderr).strip()
-            if len(detail) > 500:
-                detail = detail[:500] + "..."
+            if len(detail) > self._max_error_chars:
+                detail = detail[: self._max_error_chars] + "..."
             return f"网页访问失败（curl 退出码 {response.returncode}）: {detail or url}"
 
         if not response.stdout:
@@ -109,7 +116,7 @@ class FetchWebTool(BaseTool):
             "--max-time",
             f"{self._timeout:g}",
             "--connect-timeout",
-            f"{min(10.0, self._timeout):g}",
+            f"{min(self._connect_timeout, self._timeout):g}",
             "--user-agent",
             USER_AGENT,
             "--header",
@@ -161,9 +168,13 @@ class SearchWebTool(BaseTool):
         self,
         api_key: str = "",
         timeout: float = DEFAULT_TIMEOUT,
+        endpoint: str = QIANFAN_SEARCH_ENDPOINT,
+        max_results: int = DEFAULT_SEARCH_MAX_RESULTS,
     ):
         self._api_key = api_key.strip()
         self._timeout = timeout
+        self._endpoint = endpoint
+        self._max_results = max_results
 
     def run(self, arguments: dict[str, Any]) -> str:
         query = str(arguments["query"]).strip()
@@ -179,7 +190,9 @@ class SearchWebTool(BaseTool):
             "messages": [{"role": "user", "content": query}],
             "search_source": "baidu_search_v2",
             "edition": "standard",
-            "resource_type_filter": [{"type": "web", "top_k": 10}],
+            "resource_type_filter": [
+                {"type": "web", "top_k": self._max_results}
+            ],
             "query_policy": {"enable_rewrite": True},
         }
 
@@ -226,7 +239,7 @@ class SearchWebTool(BaseTool):
 
     def _post(self, payload: dict[str, Any]) -> bytes:
         request = urllib.request.Request(
-            QIANFAN_SEARCH_ENDPOINT,
+            self._endpoint,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {self._api_key}",

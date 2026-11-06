@@ -2,3 +2,4 @@ openai
 PyYAML
 textual
 trafilatura
+mcp>=2.2.0

@@ -8,10 +8,10 @@ from textual.widgets import Collapsible, Markdown, Static
 MAX_DISPLAY_CHARS = 4000
 
 
-def _truncate(text: str) -> str:
-    if len(text) <= MAX_DISPLAY_CHARS:
+def _truncate(text: str, max_chars: int = MAX_DISPLAY_CHARS) -> str:
+    if len(text) <= max_chars:
         return text
-    return text[:MAX_DISPLAY_CHARS] + "\n...（内容过长，已截断显示）"
+    return text[:max_chars] + "\n...（内容过长，已截断显示）"
 
 
 def _badge(name: str, color: str) -> Text:
@@ -57,10 +57,10 @@ class AssistantMessage(Vertical):
 
 
 class ToolResultMessage(Vertical):
-    def __init__(self, name: str, output: str):
+    def __init__(self, name: str, output: str, max_chars: int = MAX_DISPLAY_CHARS):
         super().__init__(classes="message tool")
         self._collapsible = Collapsible(
-            Static(Text(_truncate(output)), classes="tool-output"),
+            Static(Text(_truncate(output, max_chars)), classes="tool-output"),
             title=f"工具 · {name}",
             collapsed=True,
         )
@@ -75,6 +75,14 @@ class ErrorMessage(Static):
         text.append("\n")
         text.append(message)
         super().__init__(text, classes="message error")
+
+
+class WarningMessage(Static):
+    def __init__(self, message: str):
+        text = _badge("警告", "#d4a017")
+        text.append("\n")
+        text.append(message)
+        super().__init__(text, classes="message warning")
 
 
 class WelcomeMessage(Static):

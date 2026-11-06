@@ -40,3 +40,20 @@ class ToolCallFinished(AgentEvent):
 @dataclass(frozen=True)
 class TurnCompleted(AgentEvent):
     content: str
+
+
+@dataclass(frozen=True)
+class CompactionStarted(AgentEvent):
+    archive_id: str
+
+
+@dataclass(frozen=True)
+class CompactionCompleted(AgentEvent):
+    archive_id: str
+    original: str
+    summary: str
+
+
+@dataclass(frozen=True)
+class CompactionFailed(AgentEvent):
+    error: str

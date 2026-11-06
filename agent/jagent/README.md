@@ -17,20 +17,28 @@ agent/jagent/
 ├── main.py                      # TUI 启动入口
 ├── config.example.ini           # 模型与 Agent 配置示例
 ├── config.ini                   # 本地配置（已忽略，不提交）
+├── .mcp.json                    # MCP Server 连接配置
 ├── requirements.txt
 ├── README.md
 ├── core/
 │   ├── __init__.py              # 核心公共 API
+│   ├── archive.py               # 原始上下文归档与全文关键词检索
 │   ├── bootstrap.py             # 组合根：装配模型、工具、历史与会话
+│   ├── compaction.py            # 上下文压缩 Prompt 与历史转录
 │   ├── config.py                # 配置读取与数据类
+│   ├── context.py               # Token 估算、上下文使用量与窗口探测
 │   ├── events.py                # UI 无关的事件契约
 │   ├── history.py               # 会话历史持久化
 │   ├── llm.py                   # ChatModel 协议与 OpenAI 实现
+│   ├── local_server.py          # 启动时自动拉起本地 LM Studio / Ollama
+│   ├── mcp.py                   # MCP Client、连接管理与工具适配
 │   ├── session.py               # Agent 会话编排、流式聚合与工具循环
+│   ├── sessions.py              # 多会话保存、恢复与索引
 │   ├── skills.py                # Skill 发现、加载与 System Prompt 注入
 │   └── tools/
 │       ├── __init__.py          # 默认工具注册表
 │       ├── base.py              # 工具抽象基类
+│       ├── context_tools.py     # recallContext 工具
 │       ├── registry.py          # 工具注册与统一错误处理
 │       ├── datetime_tools.py    # 时间工具
 │       ├── skill_tools.py       # loadSkill / createSkill 工具
@@ -42,11 +50,16 @@ agent/jagent/
 ├── tui/
 │   ├── __init__.py
 │   ├── app.py                   # Textual App
+│   ├── first_run.py             # 首次运行配置提示窗口
 │   ├── styles.tcss              # Textual 样式
 │   └── widgets/
 │       ├── __init__.py
+│       ├── compact.py           # 压缩前后对比浮动面板
+│       ├── palette.py           # Slash 命令与会话选择面板
 │       └── messages.py          # 用户、助手、工具与错误消息组件
 └── tests/
+    ├── test_context.py          # 上下文压缩、归档与检索测试
+    ├── test_mcp.py
     ├── test_session.py
     ├── test_tools.py
     └── test_web_tools.py
@@ -87,6 +100,9 @@ agent/jagent/
 | `RunCli` | 调用本地已安装的命令行程序，返回 stdout、stderr 和退出码 |
 | `loadSkill` | 按名称加载 Skill 的完整 `SKILL.md`，或加载 Skill 目录内的附件文件 |
 | `createSkill` | 根据名称和完整内容创建符合规范的 Skill，已存在时不覆盖 |
+| `recallContext` | 在上下文归档中全文检索历史消息，支持按归档编号过滤 |
+
+MCP Server 通过 `list_tools()` 暴露的工具会在启动时动态注册到同一工具注册表中，调用方式与上述本地工具完全一致。
 
 删除目录和重命名操作会拒绝文件系统根目录，以及包含当前工作目录的路径。
 
@@ -119,6 +135,58 @@ description: Extract text and metadata from PDF files.
 
 模型也可以调用 `createSkill` 根据自然语言要求创建新的 Skill。工具接收 `name` 和 `skillContext` 两个参数，将名称规范化为小写字母、数字和连字符组成的格式，并在 `.agents/skills/<name>/SKILL.md` 中写入包含 `name`、`description` 和正文的完整内容。`skillContext` 可以自带 YAML Frontmatter，其中的 `description` 会被保留；未提供时会从正文首段自动生成。如果同名 Skill 已存在，工具只返回提示，不会覆盖原内容。需要补充 `references/`、`scripts/` 等目录或文件时，模型应继续调用 `createDirectory`、`createFile` 等文件工具。
 
+## MCP Client
+
+JAgent 读取当前工作目录下的 `.mcp.json`，使用 MCP Python SDK 连接配置中的 Server，并调用 `list_tools()` 把远端工具动态注册到现有工具注册表。支持 `stdio` 和 `streamable_http` 两种传输方式。TUI 启动后会在后台异步加载 MCP；连接进度、已连接 Server 和可用工具会在侧边栏动态刷新：
+
+```json
+{
+  "mcpServers": {
+    "Bazi-MCP": {
+      "type": "streamable_http",
+      "url": "https://mcp.api-inference.modelscope.net/5c9706784d4549/mcp"
+    },
+    "local-tools": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["path/to/server.py"],
+      "env": {"API_KEY": "..."}
+    }
+  }
+}
+```
+
+- `stdio` 配置支持 `command`、`args`、`env` 和可选 `cwd`；`cwd` 相对于 `.mcp.json` 所在目录解析。
+- `streamable_http` 配置支持 `url` 和可选 `headers`。
+- 工具名称默认保持 MCP Server 返回的原名。当与本地工具或其他 MCP Server 的工具重名时，会自动增加服务器名称前缀，例如 `ServerA__search`，内部维护暴露名称到 `Server + 原始工具名` 的映射。
+- 调用 MCP 工具时，JAgent 通过现有的 Function Calling 工具循环转发工具名和参数，并拼接返回的文本内容、结构化数据；`isError` 结果会以明确的错误文本返回。
+- 单个 MCP Server 连接失败只会记录错误并跳过该 Server，不影响本地工具和其他 MCP Server。配置错误会输出到标准错误流；连接错误会显示在侧边栏。
+- MCP 连接在后台事件循环线程中保持，退出时自动关闭。TUI 首屏先渲染，再异步加载 MCP；加载完成后刷新工具注册表和侧边栏。测试或嵌入场景也可通过 `McpManager` 和 `create_session(..., mcp_manager=...)` 注入自定义配置。
+
+## 上下文压缩与历史检索
+
+当会话变长时，可以在输入框中执行 `/compact` 手动压缩上下文。压缩流程如下：
+
+1. jagent 先把当前完整消息（包含 System Prompt、用户消息、助手回复、工具调用参数和工具结果）保存到项目本地的 `.agents/context/<归档编号>.jsonl`。归档编号使用本地时间生成，例如 `20261022-153000`。
+2. 归档保存成功后，使用专门的压缩 Prompt 调用 LLM 生成约 5,000 Tokens 的 Markdown 工作摘要。压缩期间不注册任何工具，也不会继续执行原有任务。
+3. 摘要末尾会追加归档编号和 `recallContext` 使用提示，然后用摘要替换当前会话历史，同时保留原 System Prompt 和全部工具定义。
+4. 成功后弹出左右两栏的浮动面板，左侧显示压缩前原文，右侧显示压缩结果，支持滚动，可通过关闭按钮或 `Esc` 关闭。
+5. 如果压缩失败，原上下文保持不变，可以重新执行 `/compact`。
+
+TUI 顶部会显示当前会话的上下文使用量，例如 `上下文 12.3k / 128.0k · 9.6%`。优先使用模型 API 返回的 Token 使用量，无法获得时按字符数估算。上下文窗口会尝试从本地 LM Studio / Ollama 接口自动探测；无法探测时默认按 128k 处理，并在指示器中标记“默认”。也可以在 `config.ini` 中通过 `[agent] context_window` 显式指定。
+
+当上下文使用量达到配置的警告阈值时，界面会显示警告，并暂停接受普通提示词，直到 `/compact` 成功完成。默认阈值为 60%，可在 `[context] warning_ratio` 中修改。压缩后如果仍超过阈值，可以再次执行 `/compact`。
+
+`recallContext` 是普通的 Function Calling 工具，接收可选参数 `id` 和必需参数 `text`：
+
+- 提供 `id` 时只检索指定归档；省略时检索 `.agents/context/` 下所有归档。
+- 使用 Python 本地全文关键词匹配，返回匹配片段、归档编号和消息位置。
+- 结果按相关度排序并限制长度，避免检索结果再次占满上下文。
+
+## AGENTS.md 项目指令
+
+如果当前项目根目录存在 `AGENTS.md`，JAgent 会在首次加载会话时读取文件并追加到聊天历史（作为 System Prompt 之后的一条 System 消息）。该消息会写入会话历史，后续轮次直接复用，不会重复注入。路径可通过 `[session] agents_file` 修改。
+
 ## 运行
 
 ```powershell
@@ -127,33 +195,57 @@ pip install -r requirements.txt
 python main.py
 ```
 
+启动时会先检查 `[llm].base_url`：如果指向本机且端口未监听，会自动使用 `lms`（LM Studio）或 `ollama` 拉起服务，并让 LM Studio 加载 `model` 指定的模型；远程接口不会触发任何本地进程。模型名需与本地已安装模型一致。
+
 界面操作：
 
 - 在输入框中输入消息，按 `Enter` 发送
+- 输入 `/` 会弹出命令选择面板，可使用方向键选择并按 `Enter` 执行
+- `/new` 新建会话，`/save [名称]` 保存当前会话，`/resume [编号或名称]` 恢复已保存会话
+- `/compact` 手动压缩上下文并归档原始记录
+- `/clear` 清空当前会话，`/help` 查看命令，`/quit` 退出
+- 保存后的会话写入 `[session] directory`（默认 `.agents/sessions/`）；保存前的临时历史写入 `history.json`，该目录已被 `.gitignore` 忽略
 - 支持 `Ctrl+V` 粘贴系统剪贴板内容，多行文本会合并为一行
 - 也可以点击“发送”按钮
 - `Ctrl+Q` 退出
 
 ## 配置
 
-将 `config.example.ini` 复制为 `config.ini` 后填写本地配置：
+JAgent 从**当前工作目录**读取 `config.ini`。如果不存在，首次运行会自动生成一份完整的 Mock 配置（本地 LM Studio 地址、`qwen3.5-4b` 模型），然后弹出提示窗口并退出；请修改后重新启动。
+
+可以参考 `config.example.ini`。主要配置段包括：
+
+- `[llm]`：模型接口地址、模型名、API Key，以及本地服务启动/加载超时
+- `[agent]`：临时历史文件、System Prompt、可选的 `context_window`
+- `[tools]` / `[search]`：文件读取上限、命令输出上限、网页请求超时、搜索接口和结果数
+- `[context]`：默认上下文窗口、压缩阈值、归档目录、归档/摘要限制
+- `[mcp]`：MCP 连接、调用和关闭超时
+- `[skills]`：Skill 目录和 Frontmatter 读取上限
+- `[session]`：已保存会话目录和 `AGENTS.md` 路径
+- `[ui]`：侧边栏宽度和工具输出显示长度
 
 ```ini
 [llm]
 base_url = http://127.0.0.1:1234/v1
 model = qwen3.5-4b
 api_key = DUMMY
+start_timeout = 60
+load_timeout = 180
 
 [agent]
 history_file = history.json
-max_read_bytes = 1048576
+# 可选。留空时自动探测；探测失败按 [context] default_window 处理。
+# context_window = 128000
 system_prompt = 你是一个本地文件与网络信息助手，可以查询时间、搜索互联网、抓取网页正文、读取和编辑纯文本文件、管理目录。
 
 [search]
 baidu_qianfan_api_key = your_baidu_qianfan_api_key
+
+[context]
+warning_ratio = 0.6
 ```
 
-`history_file` 相对于配置文件所在目录解析。历史记录默认写入 `history.json`，`config.ini` 与 `history.json` 均已在 `.gitignore` 中忽略，不会提交到仓库。
+`history_file` 相对于配置文件所在目录解析。未命名会话默认使用 `history.json`；`/save` 后的会话写入 `[session] directory`（默认 `.agents/sessions/`）。`config.ini`、`history.json` 和 `.agents/sessions/` 均已在 `.gitignore` 中忽略，不会提交到仓库。
 
 ## 核心事件流
 
@@ -213,4 +305,4 @@ cd D:\LLM\agent\jagent
 python -m unittest discover -s tests -v
 ```
 
-测试覆盖工具注册、文件生命周期、二进制文件拒绝、安全校验、流式工具调用聚合和历史持久化。
+测试覆盖工具注册、文件生命周期、二进制文件拒绝、安全校验、流式工具调用聚合、历史持久化、上下文 Token 估算、归档检索和压缩替换流程。还覆盖配置文件生成与解析、会话保存/恢复、`AGENTS.md` 注入以及 MCP 工具刷新。
