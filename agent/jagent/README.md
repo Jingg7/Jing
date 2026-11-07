@@ -144,7 +144,7 @@ JAgent 读取当前工作目录下的 `.mcp.json`，使用 MCP Python SDK 连接
   "mcpServers": {
     "Bazi-MCP": {
       "type": "streamable_http",
-      "url": "https://mcp.api-inference.modelscope.net/5c9706784d4549/mcp"
+      "url": "https://mcp.api-inference.modelscope.net/<your-token>/mcp"
     },
     "local-tools": {
       "type": "stdio",
