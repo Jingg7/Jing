@@ -1,91 +1,150 @@
 ---
-description: 让Agent能够调用本地OfficeCLI工具，读取、创建和修改Word、Excel、PowerPoint文档。支持通过命令行参数执行Office操作任务。
+name: officecli
+description: 调用本地 officecli 可执行文件创建、读取和修改 Word(.docx)、Excel(.xlsx)、PowerPoint(.pptx) 文档，无需安装 Office。
 ---
 
-# OfficeCLI技能
+# OfficeCLI 技能
 
-## 概述
+用本技能通过 `RunCli` 工具调用本地 `officecli-win-x64.exe` 生成/编辑 Office 文档。
 
-本技能使Agent能够调用本地安装的`officecli-win-x64.exe`程序，实现对Microsoft Word、Excel和PowerPoint文档的自动化操作。该工具基于OpenXML格式处理，无需安装完整的Office软件即可进行文档编辑。
+## 可执行文件
 
-## 功能特性
+- 推荐（已验证可用）：`D:\LLM\agent\jagent\.agents\skills\officecli\officecli-win-x64.exe`
+- 备用：`D:\LLM\office\officecli-win-x64.exe`（较新构建，当前可能在启动时因缺少 `System.IO.Pipelines` 崩溃，优先用上面的副本）
 
-- **文件读取**: 打开并读取Word (.docx)、Excel (.xlsx)、PowerPoint (.pptx)文档内容
-- **文件创建**: 创建新的空白文档或从模板生成文档
-- **内容修改**: 替换文本、插入表格、修改样式等
-- **批量操作**: 支持对多个文档进行统一处理
+`RunCli` 的 `command` 传 exe 路径，`args` 传参数数组。例如：
 
-## 使用方法
-
-### 基本调用格式
-
-```bash
-D:\LLM\office\officecli-win-x64.exe [命令] [参数]
+```
+command: D:\LLM\agent\jagent\.agents\skills\officecli\officecli-win-x64.exe
+args: ["create", "D:\\LLM\\agent\\jagent\\presentations\\demo.pptx"]
 ```
 
-### 常用命令
+## 帮助优先（重要）
 
-| 命令 | 说明 | 示例 |
-|------|------|------|
-| `open` | 打开文档 | `open "C:\test.docx"` |
-| `create` | 创建新文档 | `create report.docx --template template.docx` |
-| `read` | 读取内容 | `read "C:\report.xlsx" -o output.txt` |
-| `write` | 写入内容 | `write "C:\data.pptx" --content "<xml>...</xml>"` |
-| `modify` | 修改文档 | `modify "C:\doc.docx" --replace-text "旧文本" "新文本"` |
+不确定属性名、取值格式或命令语法时，先查帮助，不要猜：
 
-### 参数说明
+- `officecli help` — 全部命令
+- `officecli help docx` / `officecli help pptx` / `officecli help xlsx`
+- `officecli help docx paragraph` — 某元素的完整 schema
+- `officecli help pptx shape`
+- `officecli help docx set paragraph` — 只列 `set` 可用的属性
 
-- `-o`, `--output`: 输出文件路径
-- `--template`: 模板文件路径（创建时使用）
-- `--content`: XML内容（写入时使用）
-- `--replace-text`: 要替换的文本
-- `--with-text`: 替换后的新文本
+格式别名：`word`→`docx`，`excel`→`xlsx`，`ppt`/`powerpoint`→`pptx`。
 
-## 参考文档
+## 策略层次
 
-详细操作说明请参考：`D:\LLM\office\OfficeCli操作说明.md`
+**L1 读取 → L2 DOM 编辑 → L3 原始 XML**，总是先用更高层。加 `--json` 得到结构化输出。
 
-## 附件文件
+## 快速开始
 
-- `officecli-win-x64.exe`: OfficeCLI Windows x64版本可执行文件
-  - 路径: `D:\LLM\office\officecli-win-x64.exe`
-  - 备用副本: `D:\LLM\agent\jagent\.agents\skills\officecli\officecli-win-x64.exe`
-  - 用途: 执行Office文档操作命令
+### 创建 PowerPoint
 
-## 注意事项
-
-1. 确保`officecli-win-x64.exe`已正确安装并配置环境变量
-2. 处理大型文档时可能需要较长时间
-3. 建议先测试小文件再处理重要文档
-4. 修改前请备份原始文档
-
-## 示例场景
-
-### 读取Excel数据到文本文件
-
-```bash
-D:\LLM\office\officecli-win-x64.exe read "C:\data.xlsx" -o "C:\output.txt"
+```
+officecli create slides.pptx
+officecli add slides.pptx / --type slide --prop title="Q4 Report" --prop background=1A1A2E
+officecli add slides.pptx '/slide[1]' --type shape --prop text="Revenue grew 25%" --prop x=2cm --prop y=5cm --prop font=Arial --prop size=24 --prop color=FFFFFF
 ```
 
-### 创建新Word文档
+### 创建 Word
 
-```bash
-D:\LLM\office\officecli-win-x64.exe create "C:\new_report.docx" --template "C:\templates\report_template.docx"
+```
+officecli create report.docx
+officecli add report.docx /body --type paragraph --prop text="Executive Summary" --prop style=Heading1
+officecli add report.docx /body --type paragraph --prop text="Revenue increased by 25% year-over-year."
 ```
 
-### 修改PowerPoint内容
+### 创建 Excel
 
-```bash
-D:\LLM\office\officecli-win-x64.exe modify "C:\presentation.pptx" --replace-text "旧标题" "新标题"
+```
+officecli create data.xlsx
+officecli set data.xlsx /Sheet1/A1 --prop value="Name" --prop bold=true
+officecli set data.xlsx /Sheet1/A2 --prop value="Alice"
 ```
 
-## 错误处理
+## 读取与检查（L1）
 
-- 文件不存在: `File not found`
-- 权限不足: `Access denied`
-- XML格式错误: `Invalid XML format`
-- 其他错误: 查看标准输出获取详细信息
+```
+officecli view <file> <mode>        # outline | stats | issues | text | annotated | html | screenshot | svg | pdf
+officecli get <file> <path> --depth N [--json]
+officecli query <file> <selector>   # CSS-like，如 paragraph[style=Normal]、shape[fill=FF0000]
+officecli validate <file>
+```
 
----
+`view outline` 看结构，`view text` 提取纯文本，`view issues` 查格式/内容问题。
 
-*本技能基于OfficeCLI工具开发，适用于Windows平台文档自动化处理场景。*
+## DOM 编辑（L2）
+
+```
+officecli set <file> <path> --prop key=value [--prop ...]
+officecli add <file> <parent> --type <type> [--after|--before <path>] [--prop ...]
+officecli add <file> <parent> --from <path>     # 克隆现有元素
+officecli move <file> <path> [--to <parent>] [--index N|--after|--before <path>]
+officecli swap <file> <path1> <path2>
+officecli remove <file> <path>
+```
+
+- 任意 XML 属性都可通过元素路径用 `set` 修改。
+- 值格式：颜色 `FF0000`/`#FF0000`/`red`/`rgb(255,0,0)`/`accent1`；间距 `12pt`/`0.5cm`/`1.5x`/`150%`；尺寸 `2.54cm`/`1in`/`72pt`/`96px`。
+- 点号别名：`--prop font.color=red --prop font.bold=true --prop font.size=14pt`。
+
+### 查找替换文本
+
+```
+officecli set doc.docx / --find draft --replace final
+officecli set doc.docx '/body/p[1]' --find weather --prop bold=true --prop color=red
+```
+
+路径 `/` = 全文；`/body/p[1]`、`/slide[N]/shape[M]` = 指定元素。默认区分大小写，忽略大小写加 `--prop 'find=(?i)error' --prop regex=true`。
+
+### batch 批量（一次保存周期）
+
+```
+officecli batch data.xlsx --commands '[{"op":"set","path":"/Sheet1/A1","props":{"value":"Done"}}]' --json
+```
+
+默认原子：任一失败整批回滚。想保留成功项加 `--best-effort`。
+
+## 原始 XML（L3）
+
+L2 无法表达时使用：
+
+```
+officecli raw <file> <part>
+officecli raw-set <file> <part> --xpath "..." --action replace --xml '<w:p>...</w:p>'
+```
+
+## 路径约定
+
+- 路径 **1-based**：`'/body/p[3]'` = 第 3 段。
+- `--index` **0-based**（Excel 的 `add --type row|col` 例外，为 1-based）。
+- PowerShell 中带 `[N]` 的路径必须加引号：`'/slide[1]'`。
+- 优先使用稳定 ID 路径，如 `/slide[1]/shape[@id=550950021]`、`/body/p[@paraId=1A2B3C4D]`。
+
+## 修改后验证
+
+```
+officecli validate <file>
+officecli view <file> issues
+```
+
+## 常见错误
+
+| 错误写法 | 正确做法 |
+|---------|---------|
+| `--name "foo"` | 用 `--prop name="foo"` |
+| 未加引号的 `[N]` 路径 | `'/slide[1]'` 加引号 |
+| 用 `read`/`write`/`modify` | 真实命令是 `create`/`add`/`set`/`view`/`query`/`get` |
+| 猜属性名 | 先 `officecli help <format> <element>` |
+| PPT 用 `shape[1]` 当正文 | `shape[1]` 通常是标题占位符，内容用 `shape[2]+` |
+
+## 专用子技能
+
+`officecli load_skill <name>` 会输出 SKILL.md，按其中规则执行（每个文档只加载一个）：
+
+- Word：`word`（报告/信函/通用）、`academic-paper`（论文）
+- PowerPoint：`pptx`（通用）、`pitch-deck`（融资）、`morph-ppt`（Morph 动画）、`morph-ppt-3d`
+- Excel：`excel`（通用）、`financial-model`（财务模型）、`data-dashboard`（数据看板）
+
+## 输出目录
+
+生成的文件建议放在工作目录下，如 `D:\LLM\agent\jagent\presentations\`（PPT）或与其他文档同级位置。
