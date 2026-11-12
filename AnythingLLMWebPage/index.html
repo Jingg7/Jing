@@ -28,10 +28,12 @@
 
 <div id="log"></div>
 
+<script src="config.js"></script>
 <script>
-const API = 'http://localhost:3001';
-const KEY = 'YOUR_ANYTHINGLLM_API_KEY';
-const headers = { 'Authorization': 'Bearer ' + KEY };
+const CFG = window.ANYTHINGLLM_CONFIG || {};
+const API = (CFG.apiBase || 'http://localhost:3001').replace(/\/+$/, '');
+const KEY = (CFG.apiKey || '').trim();
+const headers = KEY ? { 'Authorization': 'Bearer ' + KEY } : {};
 const log = (msg, cls = '') => {
   const d = document.createElement('div');
   d.className = cls;
@@ -41,19 +43,27 @@ const log = (msg, cls = '') => {
 
 let slug = null;
 
-fetch(API + '/api/v1/workspaces', { headers })
-  .then(r => r.json())
-  .then(data => {
-    const ws = (data.workspaces || [])[0];
-    if (!ws) throw new Error('没有工作区');
-    slug = ws.slug;
-    document.getElementById('ws').textContent = ws.name + ' (' + ws.slug + ')';
-    document.getElementById('btn').disabled = false;
-  })
-  .catch(e => {
-    document.getElementById('ws').textContent = '获取失败: ' + e.message;
-    log('获取工作区失败: ' + e.message, 'err');
-  });
+if (!KEY) {
+  document.getElementById('ws').textContent = '未配置 API Key';
+  log('未检测到 API Key。请复制 config.example.js 为 config.js，并填入 AnythingLLM 的 Developer API Key。', 'err');
+} else {
+  fetch(API + '/api/v1/workspaces', { headers })
+    .then(async r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text()).slice(0, 200));
+      return r.json();
+    })
+    .then(data => {
+      const ws = (data.workspaces || [])[0];
+      if (!ws) throw new Error('没有工作区');
+      slug = ws.slug;
+      document.getElementById('ws').textContent = ws.name + ' (' + ws.slug + ')';
+      document.getElementById('btn').disabled = false;
+    })
+    .catch(e => {
+      document.getElementById('ws').textContent = '获取失败: ' + e.message;
+      log('获取工作区失败: ' + e.message, 'err');
+    });
+}
 
 document.getElementById('btn').onclick = async () => {
   const files = [...document.getElementById('file').files];
